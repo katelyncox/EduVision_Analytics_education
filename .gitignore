@@ -1,0 +1,36 @@
+# R
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# renv
+renv/library/
+renv/python/
+renv/staging/
+
+# Data files (synthetic data not committed)
+data/*.csv
+data/*.xlsx
+data/*.rds
+!data/generate_data.R
+
+# Model files
+ml/*.rds
+ml/*.joblib
+
+# Quarto
+.quarto/
+*_files/
+*.html
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+# Internal Posit demo guide (not for public distribution)
+posit-README.md

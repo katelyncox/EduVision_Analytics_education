@@ -1,0 +1,473 @@
+---
+title: "National Education Performance Analysis"
+subtitle: "Comprehensive Assessment of School Performance and Initiative Impact"
+author: "EduVision Analytics - National Education Performance Institute"
+format:
+  html:
+    theme: [default, _brand.yml]
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Show code"
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+::: {.callout-important}
+## Important Disclaimer
+This project contains synthetic data and analysis created for demonstration purposes only. All data, insights, and analysis presented here are artificially generated using AI and do not represent actual education performance or school data.
+:::
+
+```{r setup}
+#| include: false
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(gt)
+library(plotly)
+library(lubridate)
+library(patchwork)
+library(tidyr)
+library(stringr)
+
+# Check if data exists, generate if needed
+if(!file.exists("data/synthetic-schools.csv")) {
+  source("data/generate_data.R")
+}
+
+# Load synthetic data - read after comment header lines
+schools <- read_csv("data/synthetic-schools.csv", skip = 4, 
+                   col_names = c("school_id", "school_name", "region", "school_type", 
+                                "funding_type", "total_enrollment", "established_year", 
+                                "latitude", "longitude"))
+enrollment <- read_csv("data/synthetic-enrollment.csv", skip = 6,
+                      col_names = c("School_ID", "Academic_Year", "Total_Students", 
+                                   "Kindergarten", "Grade_1", "Grade_2", "Grade_3", "Grade_4", 
+                                   "Grade_5", "Grade_6", "Grade_7", "Grade_8", "Grade_9", 
+                                   "Grade_10", "Grade_11", "Grade_12", "Special_Needs_Students", 
+                                   "English_Learners"))
+performance <- read_csv("data/synthetic-performance.csv", skip = 4,
+                       col_names = c("school_id", "academic_year", "math_proficiency", 
+                                    "reading_proficiency", "science_proficiency", "overall_rating",
+                                    "graduation_rate", "attendance_rate", "teacher_retention"))
+phonics <- read_csv("data/synthetic-phonics-tests.csv", skip = 4,
+                   col_names = c("school_id", "student_id", "test_date", "grade_level",
+                                "phonics_score", "letter_sounds", "word_recognition", 
+                                "reading_fluency", "comprehension"))
+initiatives <- read_csv("data/synthetic-initiatives.csv", skip = 4,
+                       col_names = c("initiative_id", "initiative_name", "start_date", 
+                                    "planned_duration_months", "status", "budget_allocated",
+                                    "schools_participating", "target_students", "primary_focus"))
+initiative_participation <- read_csv("data/synthetic-initiative-participation.csv", skip = 4,
+                                   col_names = c("initiative_id", "school_id", "participation_start",
+                                                "baseline_metric", "current_metric", "participation_level"))
+
+# Data preparation and type conversion
+phonics <- phonics |> mutate(test_date = as.Date(test_date))
+initiatives <- initiatives |> mutate(start_date = as.Date(start_date))
+initiative_participation <- initiative_participation |> mutate(participation_start = as.Date(participation_start))
+
+current_year <- "2024-2025"
+performance_current <- performance |> filter(academic_year == current_year)
+enrollment_current <- enrollment |> filter(academic_year == current_year)
+
+# Join datasets for analysis
+school_performance <- schools |>
+  left_join(performance_current, by = "school_id") |>
+  left_join(enrollment_current, by = "school_id")
+```
+
+# Executive Summary
+
+This comprehensive analysis examines national education performance across **`r nrow(schools)` schools** serving **`r format(sum(enrollment_current$total_students, na.rm = TRUE), big.mark = ",")`** students for academic year 2024-2025. The report provides insights into:
+
+- **School performance trends** across regions and funding types
+- **Student assessment outcomes** including phonics testing results  
+- **Initiative effectiveness** for `r nrow(initiatives)` active educational programs
+- **National benchmarking** and performance comparisons
+
+## Key Findings
+
+```{r summary-metrics}
+#| echo: false
+summary_stats <- school_performance |>
+  summarise(
+    avg_math = round(mean(math_proficiency, na.rm = TRUE), 1),
+    avg_reading = round(mean(reading_proficiency, na.rm = TRUE), 1),
+    avg_science = round(mean(science_proficiency, na.rm = TRUE), 1),
+    high_performing = sum(overall_rating == "Excellent", na.rm = TRUE),
+    needs_improvement = sum(overall_rating == "Needs Improvement", na.rm = TRUE)
+  )
+
+gt(summary_stats) |>
+  cols_label(
+    avg_math = "Average Math Proficiency",
+    avg_reading = "Average Reading Proficiency", 
+    avg_science = "Average Science Proficiency",
+    high_performing = "Excellent Schools",
+    needs_improvement = "Schools Needing Support"
+  ) |>
+  fmt_number(
+    columns = c(avg_math, avg_reading, avg_science),
+    decimals = 1,
+    suffixing = "%"
+  ) |>
+  tab_header(
+    title = "National Performance Snapshot",
+    subtitle = "Academic Year 2024-2025"
+  )
+```
+
+# School Performance Analysis
+
+## Regional Performance Comparison
+
+```{r regional-performance}
+regional_perf <- school_performance |>
+  group_by(region) |>
+  summarise(
+    schools = n(),
+    students = sum(total_students, na.rm = TRUE),
+    avg_math = mean(math_proficiency, na.rm = TRUE),
+    avg_reading = mean(reading_proficiency, na.rm = TRUE),
+    avg_science = mean(science_proficiency, na.rm = TRUE),
+    .groups = 'drop'
+  ) |>
+  arrange(desc(avg_math))
+
+p1 <- regional_perf |>
+  select(region, avg_math, avg_reading, avg_science) |>
+  pivot_longer(cols = -region, names_to = "subject", values_to = "score") |>
+  mutate(subject = case_when(
+    subject == "avg_math" ~ "Mathematics",
+    subject == "avg_reading" ~ "Reading", 
+    subject == "avg_science" ~ "Science"
+  )) |>
+  ggplot(aes(x = reorder(region, score), y = score, fill = subject)) +
+  geom_col(position = "dodge", alpha = 0.8) +
+  scale_fill_manual(values = c("#1B4B76", "#2E7BC6", "#4A8B3B")) +
+  labs(
+    title = "Academic Performance by Region",
+    x = "Region", 
+    y = "Average Proficiency (%)",
+    fill = "Subject"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplotly(p1)
+```
+
+```{r regional-table}
+gt(regional_perf) |>
+  cols_label(
+    region = "Region",
+    schools = "Schools",
+    students = "Total Students",
+    avg_math = "Math %",
+    avg_reading = "Reading %", 
+    avg_science = "Science %"
+  ) |>
+  fmt_number(
+    columns = c(avg_math, avg_reading, avg_science),
+    decimals = 1
+  ) |>
+  fmt_number(
+    columns = students,
+    suffixing = TRUE
+  ) |>
+  tab_header(
+    title = "Regional Performance Summary"
+  ) |>
+  data_color(
+    columns = c(avg_math, avg_reading, avg_science),
+    palette = "viridis",
+    domain = c(50, 80)
+  )
+```
+
+## Funding Type Analysis
+
+```{r funding-analysis}
+funding_perf <- school_performance |>
+  group_by(funding_type) |>
+  summarise(
+    schools = n(),
+    avg_math = mean(math_proficiency, na.rm = TRUE),
+    avg_reading = mean(reading_proficiency, na.rm = TRUE),  
+    avg_science = mean(science_proficiency, na.rm = TRUE),
+    avg_graduation = mean(graduation_rate, na.rm = TRUE),
+    avg_attendance = mean(attendance_rate, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+p2 <- funding_perf |>
+  ggplot(aes(x = funding_type, y = avg_math, fill = funding_type)) +
+  geom_col(alpha = 0.8, show.legend = FALSE) +
+  scale_fill_manual(values = c("#1B4B76", "#E17D2E", "#4A8B3B")) +
+  labs(
+    title = "Mathematics Performance by Funding Type",
+    x = "Funding Type",
+    y = "Average Math Proficiency (%)"
+  ) +
+  theme_minimal()
+
+p3 <- school_performance |>
+  ggplot(aes(x = funding_type, y = math_proficiency, fill = funding_type)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = c("#1B4B76", "#E17D2E", "#4A8B3B")) +
+  labs(
+    title = "Math Proficiency Distribution",
+    x = "Funding Type",
+    y = "Math Proficiency (%)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+(p2 / p3)
+```
+
+# Student Assessment Analysis
+
+## Phonics Testing Results
+
+```{r phonics-analysis}
+phonics_summary <- phonics |>
+  mutate(test_month = month(test_date, label = TRUE)) |>
+  group_by(grade_level, test_month) |>
+  summarise(
+    tests_conducted = n(),
+    avg_phonics_score = mean(phonics_score),
+    avg_fluency = mean(reading_fluency),
+    avg_comprehension = mean(comprehension),
+    .groups = 'drop'
+  )
+
+p4 <- phonics_summary |>
+  ggplot(aes(x = test_month, y = avg_phonics_score, color = grade_level, group = grade_level)) +
+  geom_line(size = 1.2) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("#1B4B76", "#2E7BC6", "#4A8B3B", "#E17D2E")) +
+  labs(
+    title = "Phonics Assessment Trends Throughout the Year",
+    x = "Month",
+    y = "Average Phonics Score",
+    color = "Grade Level"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplotly(p4)
+```
+
+```{r phonics-grade-comparison}
+grade_phonics <- phonics |>
+  group_by(grade_level) |>
+  summarise(
+    total_tests = n(),
+    avg_phonics = round(mean(phonics_score), 1),
+    avg_letter_sounds = round(mean(letter_sounds), 1),
+    avg_word_recognition = round(mean(word_recognition), 1),
+    avg_fluency = round(mean(reading_fluency), 1),
+    avg_comprehension = round(mean(comprehension), 1),
+    .groups = 'drop'
+  ) |>
+  arrange(grade_level)
+
+gt(grade_phonics) |>
+  cols_label(
+    grade_level = "Grade",
+    total_tests = "Tests",
+    avg_phonics = "Phonics Score",
+    avg_letter_sounds = "Letter Sounds",
+    avg_word_recognition = "Word Recognition",
+    avg_fluency = "Reading Fluency",
+    avg_comprehension = "Comprehension"
+  ) |>
+  tab_header(
+    title = "Phonics Assessment Results by Grade Level",
+    subtitle = "Academic Year 2024-2025"
+  ) |>
+  data_color(
+    columns = c(avg_phonics, avg_fluency, avg_comprehension),
+    palette = "Blues",
+    domain = c(40, 90)
+  )
+```
+
+# Initiative Impact Analysis
+
+## Active Education Initiatives
+
+```{r initiatives-overview}
+initiative_impact <- initiatives |>
+  left_join(
+    initiative_participation |>
+      group_by(initiative_id) |>
+      summarise(
+        participating_schools = n(),
+        avg_baseline = mean(baseline_metric, na.rm = TRUE),
+        avg_current = mean(current_metric, na.rm = TRUE),
+        improvement = avg_current - avg_baseline,
+        .groups = 'drop'
+      ),
+    by = "initiative_id"
+  ) |>
+  filter(status == "Active") |>
+  arrange(desc(improvement))
+
+gt(initiative_impact |> select(initiative_name, primary_focus, participating_schools, improvement)) |>
+  cols_label(
+    initiative_name = "Initiative",
+    primary_focus = "Focus Area", 
+    participating_schools = "Participating Schools",
+    improvement = "Average Improvement"
+  ) |>
+  fmt_number(
+    columns = improvement,
+    decimals = 1,
+    force_sign = TRUE
+  ) |>
+  tab_header(
+    title = "Active Education Initiative Performance",
+    subtitle = "Ranked by Average Improvement in Target Metrics"
+  ) |>
+  data_color(
+    columns = improvement,
+    palette = c("red", "white", "green"),
+    domain = c(-10, 15)
+  )
+```
+
+```{r initiative-effectiveness}
+p5 <- initiative_impact |>
+  filter(!is.na(improvement)) |>
+  ggplot(aes(x = reorder(str_wrap(initiative_name, 20), improvement), y = improvement, 
+             fill = primary_focus)) +
+  geom_col(alpha = 0.8) +
+  coord_flip() +
+  scale_fill_viridis_d() +
+  labs(
+    title = "Initiative Effectiveness Ranking",
+    subtitle = "Average improvement in target metrics",
+    x = "Initiative",
+    y = "Average Improvement (points)",
+    fill = "Focus Area"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+print(p5)
+```
+
+# Performance Trends and Correlations
+
+## Enrollment vs Performance Analysis
+
+```{r enrollment-performance}
+p6 <- school_performance |>
+  ggplot(aes(x = total_students, y = math_proficiency, color = funding_type)) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed") +
+  scale_color_manual(values = c("#1B4B76", "#E17D2E", "#4A8B3B")) +
+  labs(
+    title = "School Size vs Mathematics Performance",
+    x = "Total Student Enrollment",
+    y = "Mathematics Proficiency (%)",
+    color = "Funding Type"
+  ) +
+  theme_minimal()
+
+p7 <- school_performance |>
+  ggplot(aes(x = math_proficiency, y = reading_proficiency, color = region)) +
+  geom_point(alpha = 0.7, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linetype = "dashed") +
+  scale_color_viridis_d() +
+  labs(
+    title = "Mathematics vs Reading Performance Correlation",
+    x = "Mathematics Proficiency (%)",
+    y = "Reading Proficiency (%)",
+    color = "Region"
+  ) +
+  theme_minimal()
+
+(p6 / p7)
+```
+
+## Teacher Retention Impact
+
+```{r teacher-retention}
+teacher_impact <- school_performance |>
+  mutate(
+    retention_category = case_when(
+      teacher_retention >= 90 ~ "High (90%+)",
+      teacher_retention >= 80 ~ "Medium (80-89%)", 
+      TRUE ~ "Low (<80%)"
+    )
+  ) |>
+  group_by(retention_category) |>
+  summarise(
+    schools = n(),
+    avg_math = mean(math_proficiency, na.rm = TRUE),
+    avg_reading = mean(reading_proficiency, na.rm = TRUE),
+    avg_attendance = mean(attendance_rate, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+p8 <- teacher_impact |>
+  select(retention_category, avg_math, avg_reading) |>
+  pivot_longer(cols = -retention_category, names_to = "subject", values_to = "score") |>
+  mutate(subject = ifelse(subject == "avg_math", "Mathematics", "Reading")) |>
+  ggplot(aes(x = retention_category, y = score, fill = subject)) +
+  geom_col(position = "dodge", alpha = 0.8) +
+  scale_fill_manual(values = c("#1B4B76", "#2E7BC6")) +
+  labs(
+    title = "Academic Performance by Teacher Retention Level",
+    x = "Teacher Retention Category",
+    y = "Average Proficiency (%)",
+    fill = "Subject"
+  ) +
+  theme_minimal()
+
+print(p8)
+```
+
+# Recommendations and Action Items
+
+## Priority Areas for Improvement
+
+Based on this comprehensive analysis, the following recommendations are proposed:
+
+### 1. Regional Equity Initiatives
+- Focus additional resources on regions showing lower performance
+- Implement cross-regional best practice sharing programs
+- Develop targeted professional development for underperforming areas
+
+### 2. Teacher Retention Enhancement
+- Schools with higher teacher retention show consistently better student outcomes
+- Invest in teacher support and retention programs
+- Analyze successful retention strategies from high-performing schools
+
+### 3. Initiative Optimization  
+- Scale successful initiatives showing measurable improvement
+- Review and potentially redesign initiatives showing minimal impact
+- Improve data collection for better initiative monitoring
+
+### 4. Early Literacy Focus
+- Phonics assessment results show clear grade-level progression expectations
+- Implement intensive early intervention programs for struggling readers
+- Expand phonics testing frequency and diagnostic capabilities
+
+## Next Steps
+
+1. **Quarterly Performance Reviews**: Establish regular monitoring of key metrics
+2. **Initiative Impact Assessment**: Implement rigorous evaluation frameworks  
+3. **Resource Reallocation**: Direct additional support to schools showing greatest need
+4. **Professional Development**: Focus on evidence-based instructional practices
+5. **Technology Integration**: Leverage data systems for real-time performance monitoring
+
+---
+
+*This analysis was prepared by EduVision Analytics for national education planning and policy development. All data represents synthetic information created for demonstration purposes.*

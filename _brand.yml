@@ -1,0 +1,67 @@
+meta:
+  name:
+    short: EduVision Analytics
+    full: EduVision Analytics - National Education Performance Institute
+  link:
+    home: https://www.eduvision-analytics.edu
+
+color:
+  palette:
+    white: "#FFFFFF"
+    black: "#1A1A1A"
+    navy: "#1B4B76"
+    blue: "#2E7BC6"
+    light-blue: "#7BB3E1"
+    green: "#4A8B3B"
+    orange: "#E17D2E"
+    red: "#D63031"
+    gray: "#6C757D"
+    light-gray: "#F8F9FA"
+    
+  foreground: "#1A1A1A"
+  background: "#FFFFFF"
+  primary: "#1B4B76"
+  secondary: "#6C757D"
+  success: "#4A8B3B"
+  info: "#2E7BC6"
+  warning: "#E17D2E"
+  danger: "#D63031"
+  light: "#F8F9FA"
+  dark: "#1A1A1A"
+
+typography:
+  fonts:
+    - family: Inter
+      source: google
+      weight: [400, 500, 600, 700]
+      style: [normal, italic]
+    - family: JetBrains Mono
+      source: google
+      weight: [400, 500]
+      style: [normal, italic]
+      
+  base:
+    family: Inter
+    weight: 400
+    size: 16px
+    line-height: 1.5
+    
+  headings:
+    family: Inter
+    weight: 600
+    line-height: 1.2
+    color: "#1B4B76"
+    
+  monospace:
+    family: JetBrains Mono
+    weight: 400
+    size: 0.9em
+    
+  monospace-inline:
+    color: "#D63031"
+    background-color: "#F8F9FA"
+    
+  link:
+    weight: 500
+    color: "#1B4B76"
+    decoration: none

@@ -1,0 +1,284 @@
+---
+title: "National Education Performance Summary"
+subtitle: "Monthly Ministry Report - Executive Summary"
+author: "EduVision Analytics"
+format:
+  html:
+    theme: [default, _brand.yml]
+    toc: false
+    code-fold: true
+    embed-resources: true
+    fig-width: 8
+    fig-height: 4
+execute:
+  warning: false
+  message: false
+  echo: false
+---
+
+::: {.callout-important}
+## Important Disclaimer
+This project contains synthetic data and analysis created for demonstration purposes only.
+:::
+
+```{r setup}
+#| include: false
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(gt)
+library(plotly)
+library(lubridate)
+library(tidyr)
+library(stringr)
+
+# Check if data exists, generate if needed
+if(!file.exists("data/synthetic-schools.csv")) {
+  source("data/generate_data.R")
+}
+
+# Load synthetic data - read after comment header lines
+schools <- read_csv("data/synthetic-schools.csv", skip = 4, 
+                   col_names = c("school_id", "school_name", "region", "school_type", 
+                                "funding_type", "total_enrollment", "established_year", 
+                                "latitude", "longitude"))
+enrollment <- read_csv("data/synthetic-enrollment.csv", skip = 6,
+                      col_names = c("School_ID", "Academic_Year", "Total_Students", 
+                                   "Kindergarten", "Grade_1", "Grade_2", "Grade_3", "Grade_4", 
+                                   "Grade_5", "Grade_6", "Grade_7", "Grade_8", "Grade_9", 
+                                   "Grade_10", "Grade_11", "Grade_12", "Special_Needs_Students", 
+                                   "English_Learners"))
+performance <- read_csv("data/synthetic-performance.csv", skip = 4,
+                       col_names = c("school_id", "academic_year", "math_proficiency", 
+                                    "reading_proficiency", "science_proficiency", "overall_rating",
+                                    "graduation_rate", "attendance_rate", "teacher_retention"))
+
+# Data preparation
+current_year <- "2024-2025"
+performance_current <- performance |> filter(academic_year == current_year)
+enrollment_current <- enrollment |> filter(academic_year == current_year)
+
+# Join datasets for analysis
+school_performance <- schools |>
+  left_join(performance_current, by = "school_id") |>
+  left_join(enrollment_current, by = "school_id")
+```
+
+# 📊 National Education Performance Overview
+
+**Report Period:** Academic Year 2024-2025  
+**Generated:** `r format(Sys.Date(), "%B %d, %Y")`
+
+---
+
+## 🎯 Key Performance Indicators
+
+```{r kpi-metrics}
+kpi_data <- school_performance |>
+  summarise(
+    total_schools = n(),
+    total_students = sum(total_students, na.rm = TRUE),
+    avg_math = round(mean(math_proficiency, na.rm = TRUE), 1),
+    avg_reading = round(mean(reading_proficiency, na.rm = TRUE), 1),
+    excellent_schools = sum(overall_rating == "Excellent", na.rm = TRUE),
+    needs_improvement = sum(overall_rating == "Needs Improvement", na.rm = TRUE)
+  )
+
+# Create styled metrics cards
+metrics_display <- tibble(
+  Metric = c("Schools", "Students", "Math Proficiency", "Reading Proficiency", "Excellent Schools", "Schools Needing Support"),
+  Value = c(
+    format(kpi_data$total_schools, big.mark = ","),
+    format(kpi_data$total_students, big.mark = ","),
+    paste0(kpi_data$avg_math, "%"),
+    paste0(kpi_data$avg_reading, "%"),
+    format(kpi_data$excellent_schools, big.mark = ","),
+    format(kpi_data$needs_improvement, big.mark = ",")
+  ),
+  Status = c("📈", "👥", "📊", "📚", "⭐", "🚨")
+)
+
+gt(metrics_display) |>
+  cols_align(align = "center", columns = c(Status, Value)) |>
+  tab_style(
+    style = cell_text(size = px(20)),
+    locations = cells_body(columns = Status)
+  ) |>
+  tab_style(
+    style = cell_text(weight = "bold", size = px(16)),
+    locations = cells_body(columns = Value)
+  ) |>
+  tab_options(
+    table.background.color = "#f8f9fa",
+    table.border.top.style = "none",
+    table.border.bottom.style = "none",
+    column_labels.hidden = TRUE
+  )
+```
+
+---
+
+## 📈 Regional Performance Snapshot
+
+```{r regional-summary}
+regional_perf <- school_performance |>
+  group_by(region) |>
+  summarise(
+    Schools = n(),
+    `Avg Math (%)` = round(mean(math_proficiency, na.rm = TRUE), 1),
+    `Avg Reading (%)` = round(mean(reading_proficiency, na.rm = TRUE), 1),
+    `Excellent Schools` = sum(overall_rating == "Excellent", na.rm = TRUE),
+    .groups = 'drop'
+  ) |>
+  arrange(desc(`Avg Math (%)`))
+
+gt(regional_perf) |>
+  tab_header(
+    title = "Regional Performance Rankings",
+    subtitle = "Ordered by Mathematics Performance"
+  ) |>
+  data_color(
+    columns = c(`Avg Math (%)`, `Avg Reading (%)`),
+    palette = "viridis",
+    domain = c(60, 80)
+  ) |>
+  fmt_number(
+    columns = c(`Avg Math (%)`, `Avg Reading (%)`),
+    decimals = 1
+  )
+```
+
+```{r regional-chart}
+#| fig.cap: "Academic Performance by Region - Mathematics and Reading"
+regional_chart_data <- school_performance |>
+  group_by(region) |>
+  summarise(
+    Math = mean(math_proficiency, na.rm = TRUE),
+    Reading = mean(reading_proficiency, na.rm = TRUE),
+    .groups = 'drop'
+  ) |>
+  pivot_longer(cols = c(Math, Reading), names_to = "Subject", values_to = "Score")
+
+p1 <- ggplot(regional_chart_data, aes(x = reorder(region, Score), y = Score, fill = Subject)) +
+  geom_col(position = "dodge", alpha = 0.8) +
+  scale_fill_manual(values = c("#1B4B76", "#2E7BC6")) +
+  labs(
+    title = "Regional Academic Performance Comparison",
+    x = "Region", 
+    y = "Average Proficiency (%)",
+    fill = "Subject"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  )
+
+print(p1)
+```
+
+---
+
+## ⚡ Priority Action Items
+
+### 🔴 Immediate Attention Required
+
+```{r priority-schools}
+priority_schools <- school_performance |>
+  filter(overall_rating == "Needs Improvement") |>
+  arrange(math_proficiency) |>
+  select(region, school_name, math_proficiency, reading_proficiency, total_students) |>
+  slice_head(n = 8)
+
+gt(priority_schools) |>
+  cols_label(
+    region = "Region",
+    school_name = "School",
+    math_proficiency = "Math %",
+    reading_proficiency = "Reading %",
+    total_students = "Students"
+  ) |>
+  fmt_number(
+    columns = c(math_proficiency, reading_proficiency),
+    decimals = 1
+  ) |>
+  tab_header(
+    title = "Schools Requiring Immediate Support",
+    subtitle = "Lowest performing schools needing intervention"
+  ) |>
+  data_color(
+    columns = c(math_proficiency, reading_proficiency),
+    palette = c("red", "orange", "yellow"),
+    domain = c(30, 70)
+  )
+```
+
+### 🟢 Best Practice Examples
+
+```{r exemplary-schools}
+exemplary_schools <- school_performance |>
+  filter(overall_rating == "Excellent", funding_type == "Public") |>
+  arrange(desc(math_proficiency)) |>
+  select(region, school_name, math_proficiency, reading_proficiency, teacher_retention) |>
+  slice_head(n = 6)
+
+gt(exemplary_schools) |>
+  cols_label(
+    region = "Region",
+    school_name = "School",
+    math_proficiency = "Math %",
+    reading_proficiency = "Reading %",
+    teacher_retention = "Teacher Retention %"
+  ) |>
+  fmt_number(
+    columns = c(math_proficiency, reading_proficiency, teacher_retention),
+    decimals = 1
+  ) |>
+  tab_header(
+    title = "Top Performing Public Schools",
+    subtitle = "Excellence models for best practice sharing"
+  ) |>
+  data_color(
+    columns = c(math_proficiency, reading_proficiency),
+    palette = "Greens",
+    domain = c(70, 90)
+  )
+```
+
+---
+
+## 📋 Recommended Actions
+
+### 🎯 **This Month**
+
+1. **Deploy Emergency Support Teams** to the 8 lowest-performing schools
+2. **Schedule Regional Meetings** with South and West leadership teams  
+3. **Launch Best Practice Exchange** between top and bottom performers
+
+### 📅 **Next Quarter**
+
+1. **Implement Teacher Retention Program** (correlation shown with performance)
+2. **Expand Successful Initiatives** showing measurable improvement
+3. **Establish Monthly Performance Reviews** for priority schools
+
+### 📊 **Long-term Strategy**
+
+1. **Regional Resource Reallocation** based on performance gaps
+2. **Professional Development Focus** on evidence-based practices
+3. **Data-Driven Decision Making** implementation across all schools
+
+---
+
+## 📞 Next Steps
+
+**For questions or detailed analysis, contact:**
+
+📧 **Analytics Team:** analytics@eduvision.edu  
+📱 **Emergency Support:** 1-800-EDU-HELP  
+🔗 **Dashboard Access:** [ministry.dashboard.edu](https://ministry.dashboard.edu)
+
+**Next Report:** First week of next month
+
+---
+
+*This summary is generated from comprehensive analysis of `r format(sum(enrollment_current$total_students, na.rm = TRUE), big.mark = ",")` students across `r nrow(schools)` schools. All data represents synthetic information created for demonstration purposes.*
